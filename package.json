@@ -1,0 +1,28 @@
+{
+  "name": "npm-audit-fix-message",
+  "version": "0.0.0",
+  "description": "Generate version-aware commit messages for npm audit fix changes.",
+  "type": "module",
+  "bin": {
+    "npm-audit-fix-message": "bin/npm-audit-fix-message.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "docs"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "keywords": [
+    "npm",
+    "audit",
+    "security",
+    "commit-message"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
