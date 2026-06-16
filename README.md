@@ -8,8 +8,8 @@ wants a commit message similar to a dependency-update bot PR:
 ```text
 build: update vulnerable npm packages
 
-- shell-quote (dev; critical; 1.1.0 - 1.8.3; 1.8.3 -> 1.8.4)
-  - shell-quote quote() does not escape newlines in object .op values - https://github.com/advisories/GHSA-w7jw-789q-3m8p
+- fixture-parser (dev; critical; 1.1.0 - 1.8.3; 1.8.3 -> 1.8.4)
+  - Fixture parser mishandles quoted input - https://github.com/advisories/GHSA-aaaa-bbbb-cccc
 ```
 
 ## Usage
