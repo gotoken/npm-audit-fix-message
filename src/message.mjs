@@ -1,13 +1,22 @@
 import { parseAuditOutput } from "./audit.mjs";
 import { changedPackages } from "./lockfile.mjs";
 
+const OSC_SEQUENCE = /\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/gu;
+const CSI_SEQUENCE = /\x1B\[[0-?]*[ -/]*[@-~]/gu;
+const ESCAPE_SEQUENCE = /\x1B[ -/]*[@-~]/gu;
+const C0_C1_CONTROL = /[\x00-\x1F\x7F-\x9F]/gu;
+const BIDI_CONTROL = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu;
+
 export function sanitizeCommitField(value) {
+  // This is defensive stripping for commit-message fields, not a full terminal
+  // parser. Remove known terminal and text-direction controls, then remove any
+  // remaining raw control bytes so untrusted audit text cannot affect display.
   return String(value)
-    .replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/gu, "")
-    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/gu, "")
-    .replace(/\x1B[ -/]*[@-~]/gu, "")
-    .replace(/[\x00-\x1F\x7F-\x9F]/gu, "")
-    .replace(/[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu, "");
+    .replace(OSC_SEQUENCE, "")
+    .replace(CSI_SEQUENCE, "")
+    .replace(ESCAPE_SEQUENCE, "")
+    .replace(C0_C1_CONTROL, "")
+    .replace(BIDI_CONTROL, "");
 }
 
 export function formatCommitMessage(advisoriesByPackage, changes) {

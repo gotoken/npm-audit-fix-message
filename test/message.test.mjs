@@ -150,6 +150,27 @@ test("sanitizeCommitField removes terminal and bidi control sequences", () => {
   );
 });
 
+test("sanitizeCommitField removes OSC sequences terminated by BEL or string terminator", () => {
+  assert.equal(
+    sanitizeCommitField("before\x1B]52;c;Y2xpcGJvYXJk\x07after"),
+    "beforeafter",
+  );
+  assert.equal(
+    sanitizeCommitField("before\x1B]0;window title\x1B\\after"),
+    "beforeafter",
+  );
+});
+
+test("sanitizeCommitField removes CSI and simple ESC sequences", () => {
+  assert.equal(sanitizeCommitField("red\x1B[31mtext\x1B[0m"), "redtext");
+  assert.equal(sanitizeCommitField("reset\x1Bcafter"), "resetafter");
+});
+
+test("sanitizeCommitField removes raw controls and bidi overrides", () => {
+  assert.equal(sanitizeCommitField("line\nbreak\ttext"), "linebreaktext");
+  assert.equal(sanitizeCommitField("abc\u202Edef\u2069ghi"), "abcdefghi");
+});
+
 test("formatCommitMessage strips control characters from generated fields", () => {
   const advisories = new Map([
     [
