@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 import {
   changedPackages,
   formatCommitMessage,
+  parseAuditJson,
   parseArgs,
   parseAuditOutput,
 } from "../src/index.mjs";
@@ -16,6 +18,27 @@ test("parseArgs supports fix mode", () => {
     lockfile: "package-lock.json",
     messageFile: "msg.txt",
   });
+});
+
+test("parseArgs rejects invalid option combinations", () => {
+  assert.throws(
+    () => parseArgs(["--fix", "--audit", "audit.json"]),
+    /Use either --fix or --audit/,
+  );
+  assert.throws(() => parseArgs(["--unknown"]), /Unknown option/);
+  assert.throws(() => parseArgs(["--audit"]), /Missing value/);
+  assert.throws(
+    () => parseArgs(["--message-file"]),
+    /Missing value/,
+  );
+  assert.throws(
+    () => parseArgs([]),
+    /Missing required option/,
+  );
+});
+
+test("parseArgs allows help without a mode", () => {
+  assert.equal(parseArgs(["--help"]).help, true);
 });
 
 test("formats a commit message from npm audit --json output", () => {
@@ -66,6 +89,49 @@ test("formats a commit message from npm audit --json output", () => {
   );
 });
 
+test("parseAuditJson ignores string via entries and keeps empty advisories", () => {
+  const advisories = parseAuditJson({
+    vulnerabilities: {
+      "fixture-parser": {
+        name: "fixture-parser",
+        severity: "high",
+        range: "<1.8.4",
+        via: [
+          "transitive-parent",
+          {
+            title: "Fixture parser mishandles quoted input",
+            url: "https://github.com/advisories/GHSA-aaaa-bbbb-cccc",
+          },
+        ],
+      },
+      "fixture-empty": {
+        name: "fixture-empty",
+        severity: "moderate",
+        range: "<2.0.0",
+        via: [],
+      },
+    },
+  });
+
+  assert.deepEqual(advisories.get("fixture-parser"), {
+    name: "fixture-parser",
+    severity: "high",
+    range: "<1.8.4",
+    advisories: [
+      {
+        title: "Fixture parser mishandles quoted input",
+        url: "https://github.com/advisories/GHSA-aaaa-bbbb-cccc",
+      },
+    ],
+  });
+  assert.deepEqual(advisories.get("fixture-empty"), {
+    name: "fixture-empty",
+    severity: "moderate",
+    range: "<2.0.0",
+    advisories: [],
+  });
+});
+
 test("formats a commit message from npm audit --verbose text output", () => {
   const audit = parseAuditOutput(`
 fixture-parser  1.1.0 - 1.8.3
@@ -97,4 +163,78 @@ Fixture parser allows unsafe token expansion - https://github.com/advisories/GHS
       "",
     ].join("\n"),
   );
+});
+
+test("changedPackages handles scoped packages and dependency kind", () => {
+  const changes = changedPackages(
+    {
+      packages: {
+        "node_modules/@scope/fixture": { version: "1.0.0" },
+        "node_modules/dev-fixture": { version: "2.0.0", dev: true },
+      },
+    },
+    {
+      packages: {
+        "node_modules/@scope/fixture": { version: "1.0.1" },
+        "node_modules/dev-fixture": { version: "2.1.0", dev: true },
+      },
+    },
+  );
+
+  assert.deepEqual(changes.get("@scope/fixture"), {
+    name: "@scope/fixture",
+    from: "1.0.0",
+    to: "1.0.1",
+    kind: "prod",
+  });
+  assert.deepEqual(changes.get("dev-fixture"), {
+    name: "dev-fixture",
+    from: "2.0.0",
+    to: "2.1.0",
+    kind: "dev",
+  });
+});
+
+test("changedPackages handles duplicate package names and unchanged packages", () => {
+  const changes = changedPackages(
+    {
+      packages: {
+        "node_modules/fixture": { version: "1.0.0" },
+        "node_modules/parent/node_modules/fixture": { version: "1.5.0" },
+        "node_modules/unchanged": { version: "3.0.0" },
+      },
+    },
+    {
+      packages: {
+        "node_modules/fixture": { version: "1.0.0" },
+        "node_modules/parent/node_modules/fixture": { version: "1.5.1" },
+        "node_modules/unchanged": { version: "3.0.0" },
+      },
+    },
+  );
+
+  assert.deepEqual(changes.get("fixture"), {
+    name: "fixture",
+    from: "1.5.0",
+    to: "1.5.1",
+    kind: "prod",
+  });
+  assert.equal(changes.has("unchanged"), false);
+});
+
+test("CLI prints help", (context) => {
+  const result = spawnSync(
+    process.execPath,
+    ["bin/npm-audit-fix-message.mjs", "--help"],
+    { encoding: "utf8" },
+  );
+
+  if (result.error?.code === "EPERM") {
+    context.skip("child process execution is blocked in this environment");
+    return;
+  }
+
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /npm-audit-fix-message --fix/);
+  assert.equal(result.stderr, "");
 });

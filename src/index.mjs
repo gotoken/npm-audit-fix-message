@@ -43,6 +43,10 @@ export function parseArgs(argv) {
     throw new Error("Use either --fix or --audit, not both.");
   }
 
+  if (!options.help && !options.fix && !options.auditPath) {
+    throw new Error("Missing required option: --fix or --audit <file>");
+  }
+
   return options;
 }
 
@@ -313,10 +317,6 @@ export function generateMessage(options) {
     oldLock = readJsonFile(lockfilePath);
     runNpmAuditFix();
   } else {
-    if (!options.auditPath) {
-      throw new Error("Missing required option: --fix or --audit <file>");
-    }
-
     if (!existsSync(options.auditPath)) {
       throw new Error(`Audit output file does not exist: ${options.auditPath}`);
     }

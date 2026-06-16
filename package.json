@@ -1,8 +1,17 @@
 {
   "name": "npm-audit-fix-message",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Generate version-aware commit messages for npm audit fix changes.",
   "type": "module",
+  "author": "gotoken",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gotoken/npm-audit-fix-message.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gotoken/npm-audit-fix-message/issues"
+  },
+  "homepage": "https://github.com/gotoken/npm-audit-fix-message#readme",
   "bin": {
     "npm-audit-fix-message": "bin/npm-audit-fix-message.mjs"
   },
@@ -22,6 +31,10 @@
     "commit-message"
   ],
   "license": "MIT",
+  "packageManager": "npm@11.13.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20"
   }
