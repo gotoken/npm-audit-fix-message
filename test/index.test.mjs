@@ -12,6 +12,7 @@ import {
   parseAuditJson,
   parseArgs,
   parseAuditOutput,
+  sanitizeCommitField,
 } from "../src/index.mjs";
 
 test("parseArgs supports fix mode", () => {
@@ -175,6 +176,69 @@ test("parseAuditJson ignores string via entries and keeps empty advisories", () 
     range: "<2.0.0",
     advisories: [],
   });
+});
+
+test("sanitizeCommitField removes terminal and bidi control sequences", () => {
+  assert.equal(
+    sanitizeCommitField(
+      [
+        "safe",
+        "\x1B[2J",
+        "screen",
+        "\x1B]52;c;Y2xpcGJvYXJkLXBheWxvYWQ=\x07",
+        "clipboard",
+        "\u202E",
+        "bidi",
+        "\x00",
+        "nul",
+      ].join(""),
+    ),
+    "safescreenclipboardbidinul",
+  );
+});
+
+test("formatCommitMessage strips control characters from generated fields", () => {
+  const advisories = new Map([
+    [
+      "fixture-runner",
+      {
+        name: "fixture-runner",
+        severity: "critical\x1B[31m",
+        range: "<2.4.0\u202E",
+        advisories: [
+          {
+            title: "Clear terminal\x1B[2J and set clipboard\x1B]52;c;QQ==\x07",
+            url: "https://github.com/advisories/GHSA-xxxx-yyyy-zzzz\x1B[?1049h",
+          },
+        ],
+      },
+    ],
+  ]);
+  const changes = new Map([
+    [
+      "fixture-runner",
+      {
+        name: "fixture-runner",
+        from: "2.3.1",
+        to: "2.4.0",
+        kind: "dev\u202E",
+      },
+    ],
+  ]);
+  const message = formatCommitMessage(advisories, changes);
+
+  assert.equal(
+    message,
+    [
+      "build: update vulnerable npm packages",
+      "",
+      "- fixture-runner (dev; critical; <2.4.0; 2.3.1 -> 2.4.0)",
+      "  - Clear terminal and set clipboard - https://github.com/advisories/GHSA-xxxx-yyyy-zzzz",
+      "",
+    ].join("\n"),
+  );
+  assert.doesNotMatch(message, /[\x00-\x09\x0B-\x1F\x7F-\x9F]/u);
+  assert.doesNotMatch(message, /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/u);
 });
 
 test("formats a commit message from npm audit --verbose text output", () => {

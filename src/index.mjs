@@ -225,6 +225,15 @@ export function changedPackages(oldLock, newLock) {
   return changes;
 }
 
+export function sanitizeCommitField(value) {
+  return String(value)
+    .replace(/\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/gu, "")
+    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/gu, "")
+    .replace(/\x1B[ -/]*[@-~]/gu, "")
+    .replace(/[\x00-\x1F\x7F-\x9F]/gu, "")
+    .replace(/[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu, "");
+}
+
 export function formatCommitMessage(advisoriesByPackage, changes) {
   const changedVulnerablePackages = [...changes.values()].filter((change) =>
     advisoriesByPackage.has(change.name),
@@ -247,13 +256,15 @@ export function formatCommitMessage(advisoriesByPackage, changes) {
       advisory.severity,
       advisory.range,
       `${change.from} -> ${change.to}`,
-    ].filter(Boolean);
+    ]
+      .filter(Boolean)
+      .map(sanitizeCommitField);
 
-    lines.push(`- ${change.name} (${fields.join("; ")})`);
+    lines.push(`- ${sanitizeCommitField(change.name)} (${fields.join("; ")})`);
 
     for (const via of advisory.advisories) {
-      const suffix = via.url ? ` - ${via.url}` : "";
-      lines.push(`  - ${via.title}${suffix}`);
+      const suffix = via.url ? ` - ${sanitizeCommitField(via.url)}` : "";
+      lines.push(`  - ${sanitizeCommitField(via.title)}${suffix}`);
     }
   }
 
