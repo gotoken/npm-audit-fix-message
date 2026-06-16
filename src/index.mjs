@@ -260,6 +260,13 @@ export function formatCommitMessage(advisoriesByPackage, changes) {
   return `${lines.join("\n")}\n`;
 }
 
+export function generateMessageFromInputs({ auditRaw, oldLock, newLock }) {
+  const advisories = parseAuditOutput(auditRaw);
+  const changes = changedPackages(oldLock, newLock);
+
+  return formatCommitMessage(advisories, changes);
+}
+
 export function readJsonFile(filePath) {
   return JSON.parse(readFileSync(filePath, "utf8"));
 }
@@ -306,30 +313,56 @@ export function runNpmAuditFix() {
   }
 }
 
-export function generateMessage(options) {
-  const lockfilePath = path.resolve(process.cwd(), options.lockfile);
+export function collectFixInputs(options, helpers = {}) {
+  const {
+    cwd = process.cwd,
+    readJson = readJsonFile,
+    resolvePath = path.resolve,
+    runAuditFix = runNpmAuditFix,
+    runAuditJson = runNpmAuditJson,
+  } = helpers;
+  const lockfilePath = resolvePath(cwd(), options.lockfile);
+  const auditRaw = runAuditJson();
+  const oldLock = readJson(lockfilePath);
 
-  let auditRaw;
-  let oldLock;
+  runAuditFix();
 
-  if (options.fix) {
-    auditRaw = runNpmAuditJson();
-    oldLock = readJsonFile(lockfilePath);
-    runNpmAuditFix();
-  } else {
-    if (!existsSync(options.auditPath)) {
-      throw new Error(`Audit output file does not exist: ${options.auditPath}`);
-    }
+  return {
+    auditRaw,
+    oldLock,
+    newLock: readJson(lockfilePath),
+  };
+}
 
-    auditRaw = readFileSync(options.auditPath, "utf8");
-    oldLock = readGitJson(options.base, options.lockfile);
+export function collectAuditInputs(options, helpers = {}) {
+  const {
+    cwd = process.cwd,
+    exists = existsSync,
+    readGitJsonFile = readGitJson,
+    readJson = readJsonFile,
+    readText = (filePath) => readFileSync(filePath, "utf8"),
+    resolvePath = path.resolve,
+  } = helpers;
+
+  if (!exists(options.auditPath)) {
+    throw new Error(`Audit output file does not exist: ${options.auditPath}`);
   }
 
-  const newLock = readJsonFile(lockfilePath);
-  const advisories = parseAuditOutput(auditRaw);
-  const changes = changedPackages(oldLock, newLock);
+  return {
+    auditRaw: readText(options.auditPath),
+    oldLock: readGitJsonFile(options.base, options.lockfile),
+    newLock: readJson(resolvePath(cwd(), options.lockfile)),
+  };
+}
 
-  return formatCommitMessage(advisories, changes);
+export function collectMessageInputs(options, helpers = {}) {
+  return options.fix
+    ? collectFixInputs(options, helpers)
+    : collectAuditInputs(options, helpers);
+}
+
+export function generateMessage(options, helpers = {}) {
+  return generateMessageFromInputs(collectMessageInputs(options, helpers));
 }
 
 export function main() {
