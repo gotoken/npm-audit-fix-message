@@ -31,6 +31,11 @@ Primary behavior:
 5. match changed packages to pre-fix advisories,
 6. print a commit message.
 
+If `npm audit fix` exits non-zero after applying lockfile changes, `--fix`
+still generates a message for the changed packages and warns that remaining
+vulnerabilities may require a separate action such as `npm audit fix --force`.
+Unchanged vulnerable packages are not included in the generated commit message.
+
 Secondary behavior:
 
 ```sh

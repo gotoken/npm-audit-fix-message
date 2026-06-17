@@ -4,6 +4,7 @@ import path from "node:path";
 import process from "node:process";
 
 import { generateMessageFromInputs } from "./message.mjs";
+import { changedPackages } from "./lockfile.mjs";
 
 export {
   parseAuditJson,
@@ -136,9 +137,26 @@ export function runNpmAuditFix() {
     stdio: "inherit",
   });
 
-  if (result.status !== 0) {
-    throw new Error("npm audit fix failed.");
+  if (result.error) {
+    throw new Error(`npm audit fix failed: ${result.error.message}`);
   }
+
+  return {
+    signal: result.signal,
+    status: result.status,
+  };
+}
+
+function auditFixFailed(result) {
+  return result?.status !== 0 || Boolean(result?.signal);
+}
+
+function auditFixExitDescription(result) {
+  if (result?.signal) {
+    return `signal ${result.signal}`;
+  }
+
+  return `status ${result?.status ?? "unknown"}`;
 }
 
 export function collectFixInputs(options, helpers = {}) {
@@ -148,17 +166,35 @@ export function collectFixInputs(options, helpers = {}) {
     resolvePath = path.resolve,
     runAuditFix = runNpmAuditFix,
     runAuditJson = runNpmAuditJson,
+    warn = console.error,
   } = helpers;
   const lockfilePath = resolvePath(cwd(), options.lockfile);
   const auditRaw = runAuditJson();
   const oldLock = readJson(lockfilePath);
+  const fixResult = runAuditFix() ?? { status: 0 };
+  const newLock = readJson(lockfilePath);
 
-  runAuditFix();
+  if (auditFixFailed(fixResult)) {
+    const changes = changedPackages(oldLock, newLock);
+
+    if (changes.size === 0) {
+      throw new Error("npm audit fix failed.");
+    }
+
+    warn(
+      [
+        `Warning: npm audit fix exited with ${auditFixExitDescription(
+          fixResult,
+        )} after applying lockfile changes.`,
+        "Some vulnerabilities may remain and may require npm audit fix --force.",
+      ].join("\n"),
+    );
+  }
 
   return {
     auditRaw,
     oldLock,
-    newLock: readJson(lockfilePath),
+    newLock,
   };
 }
 

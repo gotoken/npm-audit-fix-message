@@ -84,6 +84,108 @@ test("collectFixInputs captures audit and lockfiles around npm audit fix", () =>
   ]);
 });
 
+test("collectFixInputs accepts partial npm audit fix success with lockfile changes", () => {
+  const warnings = [];
+  const oldLock = {
+    packages: {
+      "node_modules/fixed-fixture": { version: "1.0.0" },
+      "node_modules/unresolved-fixture": { version: "2.0.0" },
+    },
+  };
+  const newLock = {
+    packages: {
+      "node_modules/fixed-fixture": { version: "1.0.1" },
+      "node_modules/unresolved-fixture": { version: "2.0.0" },
+    },
+  };
+  const inputs = collectFixInputs(
+    { lockfile: "package-lock.json" },
+    {
+      cwd: () => "/work/project",
+      readJson: (() => {
+        let reads = 0;
+        return () => {
+          reads += 1;
+          return reads === 1 ? oldLock : newLock;
+        };
+      })(),
+      resolvePath: (...parts) => parts.join("/"),
+      runAuditFix: () => ({ status: 1 }),
+      runAuditJson: () =>
+        JSON.stringify({
+          vulnerabilities: {
+            "fixed-fixture": {
+              name: "fixed-fixture",
+              severity: "high",
+              range: "<1.0.1",
+              via: [{ title: "Fixed fixture vulnerability" }],
+            },
+            "unresolved-fixture": {
+              name: "unresolved-fixture",
+              severity: "critical",
+              range: "<3.0.0",
+              via: [{ title: "Unresolved fixture vulnerability" }],
+            },
+          },
+        }),
+      warn: (message) => warnings.push(message),
+    },
+  );
+
+  assert.deepEqual(inputs, {
+    auditRaw: JSON.stringify({
+      vulnerabilities: {
+        "fixed-fixture": {
+          name: "fixed-fixture",
+          severity: "high",
+          range: "<1.0.1",
+          via: [{ title: "Fixed fixture vulnerability" }],
+        },
+        "unresolved-fixture": {
+          name: "unresolved-fixture",
+          severity: "critical",
+          range: "<3.0.0",
+          via: [{ title: "Unresolved fixture vulnerability" }],
+        },
+      },
+    }),
+    oldLock,
+    newLock,
+  });
+  assert.equal(warnings.length, 1);
+  assert.match(
+    warnings[0],
+    /npm audit fix exited with status 1 after applying lockfile changes/,
+  );
+  assert.match(warnings[0], /Some vulnerabilities may remain/);
+});
+
+test("collectFixInputs rejects failed npm audit fix without lockfile changes", () => {
+  const lock = {
+    packages: {
+      "node_modules/fixture-runner": { version: "2.3.1", dev: true },
+    },
+  };
+  const warnings = [];
+
+  assert.throws(
+    () =>
+      collectFixInputs(
+        { lockfile: "package-lock.json" },
+        {
+          cwd: () => "/work/project",
+          readJson: () => lock,
+          resolvePath: (...parts) => parts.join("/"),
+          runAuditFix: () => ({ status: 1 }),
+          runAuditJson: () => '{"vulnerabilities":{}}',
+          warn: (message) => warnings.push(message),
+        },
+      ),
+    /npm audit fix failed/,
+  );
+  assert.deepEqual(warnings, []);
+});
+
 test("collectAuditInputs reads saved audit output and git base lockfile", () => {
   const oldLock = {
     packages: {
@@ -189,6 +291,70 @@ test("generateMessage uses the selected input collection path", () => {
       "",
     ].join("\n"),
   );
+});
+
+test("generateMessage omits unresolved vulnerabilities after partial fix", () => {
+  const warningMessages = [];
+  const message = generateMessage(
+    {
+      fix: true,
+      lockfile: "package-lock.json",
+    },
+    {
+      cwd: () => "/work/project",
+      readJson: (() => {
+        let reads = 0;
+        return () => {
+          reads += 1;
+          return reads === 1
+            ? {
+                packages: {
+                  "node_modules/fixed-fixture": { version: "1.0.0" },
+                  "node_modules/unresolved-fixture": { version: "2.0.0" },
+                },
+              }
+            : {
+                packages: {
+                  "node_modules/fixed-fixture": { version: "1.0.1" },
+                  "node_modules/unresolved-fixture": { version: "2.0.0" },
+                },
+              };
+        };
+      })(),
+      resolvePath: (...parts) => parts.join("/"),
+      runAuditFix: () => ({ status: 1 }),
+      runAuditJson: () =>
+        JSON.stringify({
+          vulnerabilities: {
+            "fixed-fixture": {
+              name: "fixed-fixture",
+              severity: "high",
+              range: "<1.0.1",
+              via: [{ title: "Fixed fixture vulnerability" }],
+            },
+            "unresolved-fixture": {
+              name: "unresolved-fixture",
+              severity: "critical",
+              range: "<3.0.0",
+              via: [{ title: "Unresolved fixture vulnerability" }],
+            },
+          },
+        }),
+      warn: (messageText) => warningMessages.push(messageText),
+    },
+  );
+
+  assert.equal(
+    message,
+    [
+      "build: update vulnerable npm packages",
+      "",
+      "- fixed-fixture (prod; high; <1.0.1; 1.0.0 -> 1.0.1)",
+      "  - Fixed fixture vulnerability",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(warningMessages.length, 1);
 });
 
 test("CLI prints help", (context) => {
