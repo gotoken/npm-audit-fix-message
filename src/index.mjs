@@ -13,12 +13,15 @@ export {
 } from "./audit.mjs";
 export {
   changedPackages,
+  directDependencyRequestersByName,
+  directDependencyRequestersForChanges,
   packageEntriesByName,
   packageKind,
   packageNameFromLockPath,
 } from "./lockfile.mjs";
 export {
   formatCommitMessage,
+  fixedAdvisoriesByPackage,
   generateMessageFromInputs,
   sanitizeCommitField,
 } from "./message.mjs";
@@ -134,7 +137,7 @@ export function runNpmAuditFix() {
   const result = spawnSync("npm", ["audit", "fix"], {
     encoding: "utf8",
     env: process.env,
-    stdio: "inherit",
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
   if (result.error) {
@@ -144,11 +147,13 @@ export function runNpmAuditFix() {
   return {
     signal: result.signal,
     status: result.status,
+    stderr: result.stderr,
+    stdout: result.stdout,
   };
 }
 
 function auditFixFailed(result) {
-  return result?.status !== 0 || Boolean(result?.signal);
+  return (result?.status ?? 0) !== 0 || Boolean(result?.signal);
 }
 
 function auditFixExitDescription(result) {
@@ -173,6 +178,7 @@ export function collectFixInputs(options, helpers = {}) {
   const oldLock = readJson(lockfilePath);
   const fixResult = runAuditFix() ?? { status: 0 };
   const newLock = readJson(lockfilePath);
+  let auditAfterRaw;
 
   if (auditFixFailed(fixResult)) {
     const changes = changedPackages(oldLock, newLock);
@@ -186,12 +192,16 @@ export function collectFixInputs(options, helpers = {}) {
         `Warning: npm audit fix exited with ${auditFixExitDescription(
           fixResult,
         )} after applying lockfile changes.`,
-        "Some vulnerabilities may remain and may require npm audit fix --force.",
+        "Some vulnerabilities may remain; run npm audit to review them.",
+        "",
       ].join("\n"),
     );
+
+    auditAfterRaw = runAuditJson();
   }
 
   return {
+    ...(auditAfterRaw ? { auditAfterRaw } : {}),
     auditRaw,
     oldLock,
     newLock,

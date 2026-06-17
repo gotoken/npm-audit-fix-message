@@ -86,6 +86,32 @@ test("collectFixInputs captures audit and lockfiles around npm audit fix", () =>
 
 test("collectFixInputs accepts partial npm audit fix success with lockfile changes", () => {
   const warnings = [];
+  const auditBeforeRaw = JSON.stringify({
+    vulnerabilities: {
+      "fixed-fixture": {
+        name: "fixed-fixture",
+        severity: "high",
+        range: "<1.0.1",
+        via: [{ title: "Fixed fixture vulnerability" }],
+      },
+      "unresolved-fixture": {
+        name: "unresolved-fixture",
+        severity: "critical",
+        range: "<3.0.0",
+        via: [{ title: "Unresolved fixture vulnerability" }],
+      },
+    },
+  });
+  const auditAfterRaw = JSON.stringify({
+    vulnerabilities: {
+      "unresolved-fixture": {
+        name: "unresolved-fixture",
+        severity: "critical",
+        range: "<3.0.0",
+        via: [{ title: "Unresolved fixture vulnerability" }],
+      },
+    },
+  });
   const oldLock = {
     packages: {
       "node_modules/fixed-fixture": { version: "1.0.0" },
@@ -111,44 +137,20 @@ test("collectFixInputs accepts partial npm audit fix success with lockfile chang
       })(),
       resolvePath: (...parts) => parts.join("/"),
       runAuditFix: () => ({ status: 1 }),
-      runAuditJson: () =>
-        JSON.stringify({
-          vulnerabilities: {
-            "fixed-fixture": {
-              name: "fixed-fixture",
-              severity: "high",
-              range: "<1.0.1",
-              via: [{ title: "Fixed fixture vulnerability" }],
-            },
-            "unresolved-fixture": {
-              name: "unresolved-fixture",
-              severity: "critical",
-              range: "<3.0.0",
-              via: [{ title: "Unresolved fixture vulnerability" }],
-            },
-          },
-        }),
+      runAuditJson: (() => {
+        let calls = 0;
+        return () => {
+          calls += 1;
+          return calls === 1 ? auditBeforeRaw : auditAfterRaw;
+        };
+      })(),
       warn: (message) => warnings.push(message),
     },
   );
 
   assert.deepEqual(inputs, {
-    auditRaw: JSON.stringify({
-      vulnerabilities: {
-        "fixed-fixture": {
-          name: "fixed-fixture",
-          severity: "high",
-          range: "<1.0.1",
-          via: [{ title: "Fixed fixture vulnerability" }],
-        },
-        "unresolved-fixture": {
-          name: "unresolved-fixture",
-          severity: "critical",
-          range: "<3.0.0",
-          via: [{ title: "Unresolved fixture vulnerability" }],
-        },
-      },
-    }),
+    auditAfterRaw,
+    auditRaw: auditBeforeRaw,
     oldLock,
     newLock,
   });
@@ -157,7 +159,7 @@ test("collectFixInputs accepts partial npm audit fix success with lockfile chang
     warnings[0],
     /npm audit fix exited with status 1 after applying lockfile changes/,
   );
-  assert.match(warnings[0], /Some vulnerabilities may remain/);
+  assert.match(warnings[0], /run npm audit to review them/);
 });
 
 test("collectFixInputs rejects failed npm audit fix without lockfile changes", () => {
@@ -295,6 +297,32 @@ test("generateMessage uses the selected input collection path", () => {
 
 test("generateMessage omits unresolved vulnerabilities after partial fix", () => {
   const warningMessages = [];
+  const auditBeforeRaw = JSON.stringify({
+    vulnerabilities: {
+      "fixed-fixture": {
+        name: "fixed-fixture",
+        severity: "high",
+        range: "<1.0.1",
+        via: [{ title: "Fixed fixture vulnerability" }],
+      },
+      "still-vulnerable-fixture": {
+        name: "still-vulnerable-fixture",
+        severity: "critical",
+        range: "<3.0.0",
+        via: [{ title: "Still vulnerable fixture vulnerability" }],
+      },
+    },
+  });
+  const auditAfterRaw = JSON.stringify({
+    vulnerabilities: {
+      "still-vulnerable-fixture": {
+        name: "still-vulnerable-fixture",
+        severity: "critical",
+        range: "<3.0.0",
+        via: [{ title: "Still vulnerable fixture vulnerability" }],
+      },
+    },
+  });
   const message = generateMessage(
     {
       fix: true,
@@ -310,36 +338,30 @@ test("generateMessage omits unresolved vulnerabilities after partial fix", () =>
             ? {
                 packages: {
                   "node_modules/fixed-fixture": { version: "1.0.0" },
-                  "node_modules/unresolved-fixture": { version: "2.0.0" },
+                  "node_modules/still-vulnerable-fixture": {
+                    version: "2.0.0",
+                  },
                 },
               }
             : {
                 packages: {
                   "node_modules/fixed-fixture": { version: "1.0.1" },
-                  "node_modules/unresolved-fixture": { version: "2.0.0" },
+                  "node_modules/still-vulnerable-fixture": {
+                    version: "2.0.1",
+                  },
                 },
               };
         };
       })(),
       resolvePath: (...parts) => parts.join("/"),
       runAuditFix: () => ({ status: 1 }),
-      runAuditJson: () =>
-        JSON.stringify({
-          vulnerabilities: {
-            "fixed-fixture": {
-              name: "fixed-fixture",
-              severity: "high",
-              range: "<1.0.1",
-              via: [{ title: "Fixed fixture vulnerability" }],
-            },
-            "unresolved-fixture": {
-              name: "unresolved-fixture",
-              severity: "critical",
-              range: "<3.0.0",
-              via: [{ title: "Unresolved fixture vulnerability" }],
-            },
-          },
-        }),
+      runAuditJson: (() => {
+        let calls = 0;
+        return () => {
+          calls += 1;
+          return calls === 1 ? auditBeforeRaw : auditAfterRaw;
+        };
+      })(),
       warn: (messageText) => warningMessages.push(messageText),
     },
   );

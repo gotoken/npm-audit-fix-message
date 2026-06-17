@@ -1,5 +1,8 @@
 import { parseAuditOutput } from "./audit.mjs";
-import { changedPackages } from "./lockfile.mjs";
+import {
+  changedPackages,
+  directDependencyRequestersForChanges,
+} from "./lockfile.mjs";
 
 const OSC_SEQUENCE = /\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/gu;
 const CSI_SEQUENCE = /\x1B\[[0-?]*[ -/]*[@-~]/gu;
@@ -19,7 +22,76 @@ export function sanitizeCommitField(value) {
     .replace(BIDI_CONTROL, "");
 }
 
-export function formatCommitMessage(advisoriesByPackage, changes) {
+function advisoryKey(advisory) {
+  return advisory?.url || advisory?.title;
+}
+
+function remainingAdvisoryKeys(remainingAdvisories) {
+  if (!remainingAdvisories) {
+    return new Set();
+  }
+
+  return new Set(
+    [...remainingAdvisories.values()]
+      .flatMap((advisory) => advisory.advisories)
+      .map(advisoryKey)
+      .filter(Boolean),
+  );
+}
+
+export function fixedAdvisoriesByPackage(
+  advisoriesByPackage,
+  remainingAdvisories,
+) {
+  const remainingKeys = remainingAdvisoryKeys(remainingAdvisories);
+  if (remainingKeys.size === 0) {
+    return advisoriesByPackage;
+  }
+
+  const fixedAdvisories = new Map();
+
+  for (const [name, advisory] of advisoriesByPackage) {
+    const fixedVia = advisory.advisories.filter((via) => {
+      const key = advisoryKey(via);
+      return key ? !remainingKeys.has(key) : true;
+    });
+
+    if (advisory.advisories.length > 0 && fixedVia.length === 0) {
+      continue;
+    }
+
+    fixedAdvisories.set(name, {
+      ...advisory,
+      advisories: fixedVia,
+    });
+  }
+
+  return fixedAdvisories;
+}
+
+function requesterKindLabel(kind) {
+  if (kind === "prod") {
+    return "dependency";
+  }
+
+  return `${kind}Dependency`;
+}
+
+function formatRequester(requester) {
+  const manifest =
+    requester.manifestPath === "." ? "root" : requester.manifestPath;
+  const versionChange =
+    requester.from && requester.to ? ` (${requester.from} -> ${requester.to})` : "";
+  return `${manifest} ${requesterKindLabel(requester.kind)} ${
+    requester.name
+  }${versionChange}`;
+}
+
+export function formatCommitMessage(
+  advisoriesByPackage,
+  changes,
+  requestersByPackage = new Map(),
+) {
   const changedVulnerablePackages = [...changes.values()].filter((change) =>
     advisoriesByPackage.has(change.name),
   );
@@ -51,14 +123,35 @@ export function formatCommitMessage(advisoriesByPackage, changes) {
       const suffix = via.url ? ` - ${sanitizeCommitField(via.url)}` : "";
       lines.push(`  - ${sanitizeCommitField(via.title)}${suffix}`);
     }
+
+    for (const requester of requestersByPackage.get(change.name) ?? []) {
+      lines.push(
+        `  - via package.json: ${sanitizeCommitField(
+          formatRequester(requester),
+        )}`,
+      );
+    }
   }
 
   return `${lines.join("\n")}\n`;
 }
 
-export function generateMessageFromInputs({ auditRaw, oldLock, newLock }) {
-  const advisories = parseAuditOutput(auditRaw);
+export function generateMessageFromInputs({
+  auditAfterRaw,
+  auditRaw,
+  oldLock,
+  newLock,
+}) {
+  const advisories = fixedAdvisoriesByPackage(
+    parseAuditOutput(auditRaw),
+    auditAfterRaw ? parseAuditOutput(auditAfterRaw) : undefined,
+  );
   const changes = changedPackages(oldLock, newLock);
+  const requesters = directDependencyRequestersForChanges(
+    oldLock,
+    newLock,
+    changes,
+  );
 
-  return formatCommitMessage(advisories, changes);
+  return formatCommitMessage(advisories, changes, requesters);
 }

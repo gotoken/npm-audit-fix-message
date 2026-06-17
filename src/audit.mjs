@@ -32,6 +32,10 @@ export function parseAuditJson(audit) {
       });
     }
 
+    if (advisories.length === 0) {
+      continue;
+    }
+
     advisoriesByPackage.set(vulnerability.name, {
       name: vulnerability.name,
       severity: vulnerability.severity,

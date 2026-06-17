@@ -11,6 +11,7 @@ build: update vulnerable npm packages
 
 - fixture-parser (dev; critical; 1.1.0 - 1.8.3; 1.8.3 -> 1.8.4)
   - Fixture parser mishandles quoted input - https://github.com/advisories/GHSA-aaaa-bbbb-cccc
+  - via package.json: apps/gui devDependency fixture-tool (2.3.1 -> 2.4.0)
 ```
 
 ## Usage
@@ -37,7 +38,11 @@ resulting lockfile changes are easy to review.
 If `npm audit fix` applies some lockfile updates but exits non-zero because
 other vulnerabilities remain, this command still prints a commit message for
 the actual lockfile changes and writes a warning to stderr. Remaining
-vulnerabilities are not listed as fixed.
+vulnerabilities are not listed as fixed. The full `npm audit fix` report is
+suppressed in this partial-success case so the generated commit message stays
+easy to copy; run `npm audit` afterward to inspect the remaining issues. To
+avoid claiming unresolved advisories were fixed, `--fix` also checks post-fix
+audit output and omits advisory URLs that are still reported as vulnerable.
 
 Generate from a saved audit output:
 
@@ -69,10 +74,16 @@ npx npm-audit-fix-message --audit tmp/npm-audit-before.json --message-file .git/
 
 - This tool is not a replacement for Dependabot, Renovate, or CI audit policy.
 - It only compares npm lockfiles and audit output.
-- It reports packages that both changed in the lockfile and appeared in the
-  pre-fix audit output.
+- It reports packages that both changed in the lockfile and had concrete
+  advisory entries in the pre-fix audit output.
+- It omits audit graph nodes that only point to other vulnerable packages.
+- When possible, it lists package.json or workspace package.json dependencies
+  that pull in the fixed package as nested `via package.json` lines. If that
+  direct dependency's installed lockfile version changed, the line includes its
+  old and new versions.
 - If `npm audit fix` exits non-zero after changing the lockfile, `--fix`
   treats the changed packages as a partial success and warns that issues may
-  remain.
+  remain. It does not print npm's full audit report in this case, and it omits
+  advisories that are still present in post-fix audit output.
 - `npm audit --json` can exit non-zero when vulnerabilities are present; this is
   expected, and the CLI uses the JSON output when npm provides it.

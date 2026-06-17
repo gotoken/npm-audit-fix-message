@@ -28,13 +28,25 @@ Primary behavior:
 2. capture the current lockfile,
 3. run `npm audit fix`,
 4. compare the old and new lockfiles,
-5. match changed packages to pre-fix advisories,
-6. print a commit message.
+5. match changed packages to concrete pre-fix advisories,
+6. optionally trace the changed package back to package.json or workspace
+   package.json dependencies and include their installed version changes when
+   those direct dependencies also changed,
+7. print a commit message.
 
 If `npm audit fix` exits non-zero after applying lockfile changes, `--fix`
 still generates a message for the changed packages and warns that remaining
 vulnerabilities may require a separate action such as `npm audit fix --force`.
-Unchanged vulnerable packages are not included in the generated commit message.
+Unchanged vulnerable packages are not included in the generated commit message,
+and npm's full audit report is suppressed in this partial-success path so the
+commit message remains easy to copy from stdout. The command captures post-fix
+audit output and omits advisory URLs that are still reported as vulnerable,
+even if one lockfile entry for the affected package changed version.
+
+Audit graph nodes whose `via` entries only reference other packages are not
+reported as fixed packages. They can appear as dependency context through nested
+`via package.json` lines, but only packages with concrete advisory entries are
+top-level commit-message bullets.
 
 Secondary behavior:
 
@@ -52,6 +64,7 @@ build: update vulnerable npm packages
 
 - <package> (<prod|dev>; <severity>; <vulnerable-range>; <from> -> <to>)
   - <advisory title> - <advisory URL>
+  - via package.json: <manifest> <dependency-kind> <direct-package> [(<from> -> <to>)]
 ```
 
 This intentionally resembles dependency-update commit messages while staying
