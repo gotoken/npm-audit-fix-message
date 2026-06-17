@@ -23,6 +23,8 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
+      - run: npm install -g npm@11.13.0
+      - run: npm --version
       - run: npm ci
       - run: npm test
       - run: npm publish
