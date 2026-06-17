@@ -141,3 +141,42 @@ test("directDependencyRequestersForChanges includes changed direct package versi
     },
   ]);
 });
+
+test("directDependencyRequestersForChanges keeps multiple requesters for one lock path", () => {
+  const oldLock = {
+    packages: {
+      "": { dependencies: { "shared-direct": "^1.0.0" } },
+      "apps/api": { dependencies: { "shared-direct": "^1.0.0" } },
+      "node_modules/shared-direct": {
+        version: "1.0.0",
+        dependencies: { "vulnerable-fixture": "^1.0.0" },
+      },
+      "node_modules/vulnerable-fixture": { version: "1.0.0" },
+    },
+  };
+  const newLock = {
+    packages: {
+      ...oldLock.packages,
+      "node_modules/vulnerable-fixture": { version: "1.0.1" },
+    },
+  };
+  const changes = changedPackages(oldLock, newLock);
+  const requesters = directDependencyRequestersForChanges(
+    oldLock,
+    newLock,
+    changes,
+  );
+
+  assert.deepEqual(requesters.get("vulnerable-fixture"), [
+    {
+      kind: "prod",
+      manifestPath: ".",
+      name: "shared-direct",
+    },
+    {
+      kind: "prod",
+      manifestPath: "apps/api",
+      name: "shared-direct",
+    },
+  ]);
+});

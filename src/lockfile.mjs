@@ -83,7 +83,7 @@ function collectDirectDependencyRequesters(oldLock, newLock, lockPaths) {
   const oldPackages = oldLock?.packages ?? {};
   const packages = newLock?.packages ?? {};
   const reverseDependencies = new Map();
-  const directDependencies = [];
+  const directDependenciesByLockPath = new Map();
   const requesters = new Map();
   const targetPaths = new Set(lockPaths);
 
@@ -114,7 +114,7 @@ function collectDirectDependencyRequesters(oldLock, newLock, lockPaths) {
       if (dependencyPath) {
         const previousVersion = oldPackages[dependencyPath]?.version;
         const nextVersion = packages[dependencyPath]?.version;
-        directDependencies.push({
+        const directDependency = {
           ...dependency,
           lockPath: dependencyPath,
           manifestPath: lockPath || ".",
@@ -123,7 +123,12 @@ function collectDirectDependencyRequesters(oldLock, newLock, lockPaths) {
           previousVersion !== nextVersion
             ? { from: previousVersion, to: nextVersion }
             : {}),
-        });
+        };
+
+        if (!directDependenciesByLockPath.has(dependencyPath)) {
+          directDependenciesByLockPath.set(dependencyPath, []);
+        }
+        directDependenciesByLockPath.get(dependencyPath).push(directDependency);
       }
     }
   }
@@ -140,12 +145,10 @@ function collectDirectDependencyRequesters(oldLock, newLock, lockPaths) {
 
     for (let index = 0; index < queue.length; index += 1) {
       const currentPath = queue[index];
+      const directDependencies =
+        directDependenciesByLockPath.get(currentPath) ?? [];
 
       for (const dependency of directDependencies) {
-        if (dependency.lockPath !== currentPath) {
-          continue;
-        }
-
         found.set(
           `${dependency.manifestPath}\0${dependency.kind}\0${dependency.name}`,
           {
