@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { parseAuditJson, parseAuditOutput } from "../src/audit.mjs";
 
-test("parseAuditJson ignores string via entries and keeps empty advisories", () => {
+test("parseAuditJson ignores string-only via entries", () => {
   const advisories = parseAuditJson({
     vulnerabilities: {
       "fixture-parser": {
@@ -24,6 +24,12 @@ test("parseAuditJson ignores string via entries and keeps empty advisories", () 
         range: "<2.0.0",
         via: [],
       },
+      "fixture-chain": {
+        name: "fixture-chain",
+        severity: "moderate",
+        range: "*",
+        via: ["fixture-parser"],
+      },
     },
   });
 
@@ -38,12 +44,8 @@ test("parseAuditJson ignores string via entries and keeps empty advisories", () 
       },
     ],
   });
-  assert.deepEqual(advisories.get("fixture-empty"), {
-    name: "fixture-empty",
-    severity: "moderate",
-    range: "<2.0.0",
-    advisories: [],
-  });
+  assert.equal(advisories.has("fixture-empty"), false);
+  assert.equal(advisories.has("fixture-chain"), false);
 });
 
 test("parseAuditOutput parses npm audit --json output", () => {

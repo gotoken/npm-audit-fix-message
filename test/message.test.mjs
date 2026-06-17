@@ -4,6 +4,7 @@ import test from "node:test";
 import { parseAuditOutput } from "../src/audit.mjs";
 import { changedPackages } from "../src/lockfile.mjs";
 import {
+  fixedAdvisoriesByPackage,
   formatCommitMessage,
   generateMessageFromInputs,
   sanitizeCommitField,
@@ -129,6 +130,245 @@ test("generateMessageFromInputs formats from raw audit and lock objects", () => 
       "",
     ].join("\n"),
   );
+});
+
+test("generateMessageFromInputs omits advisories still present after fix", () => {
+  const message = generateMessageFromInputs({
+    auditRaw: JSON.stringify({
+      vulnerabilities: {
+        "fixed-fixture": {
+          name: "fixed-fixture",
+          severity: "high",
+          range: "<1.0.1",
+          via: [
+            {
+              title: "Fixed fixture vulnerability",
+              url: "https://github.com/advisories/GHSA-fixed-fixture",
+            },
+          ],
+        },
+        "still-vulnerable-fixture": {
+          name: "still-vulnerable-fixture",
+          severity: "critical",
+          range: "<3.0.0",
+          via: [
+            {
+              title: "Still vulnerable fixture vulnerability",
+              url: "https://github.com/advisories/GHSA-still-vulnerable",
+            },
+          ],
+        },
+      },
+    }),
+    auditAfterRaw: JSON.stringify({
+      vulnerabilities: {
+        "still-vulnerable-fixture": {
+          name: "still-vulnerable-fixture",
+          severity: "critical",
+          range: "<3.0.0",
+          via: [
+            {
+              title: "Still vulnerable fixture vulnerability",
+              url: "https://github.com/advisories/GHSA-still-vulnerable",
+            },
+          ],
+        },
+      },
+    }),
+    oldLock: {
+      packages: {
+        "node_modules/fixed-fixture": { version: "1.0.0" },
+        "node_modules/still-vulnerable-fixture": { version: "2.0.0" },
+      },
+    },
+    newLock: {
+      packages: {
+        "node_modules/fixed-fixture": { version: "1.0.1" },
+        "node_modules/still-vulnerable-fixture": { version: "2.0.1" },
+      },
+    },
+  });
+
+  assert.equal(
+    message,
+    [
+      "build: update vulnerable npm packages",
+      "",
+      "- fixed-fixture (prod; high; <1.0.1; 1.0.0 -> 1.0.1)",
+      "  - Fixed fixture vulnerability - https://github.com/advisories/GHSA-fixed-fixture",
+      "",
+    ].join("\n"),
+  );
+});
+
+test("generateMessageFromInputs keeps only fixed advisories for a package", () => {
+  const message = generateMessageFromInputs({
+    auditRaw: JSON.stringify({
+      vulnerabilities: {
+        "mixed-fixture": {
+          name: "mixed-fixture",
+          severity: "high",
+          range: "<2.0.0",
+          via: [
+            {
+              title: "Fixed mixed fixture vulnerability",
+              url: "https://github.com/advisories/GHSA-fixed-mixed",
+            },
+            {
+              title: "Remaining mixed fixture vulnerability",
+              url: "https://github.com/advisories/GHSA-remaining-mixed",
+            },
+          ],
+        },
+      },
+    }),
+    auditAfterRaw: JSON.stringify({
+      vulnerabilities: {
+        "mixed-fixture": {
+          name: "mixed-fixture",
+          severity: "high",
+          range: "<2.0.0",
+          via: [
+            {
+              title: "Remaining mixed fixture vulnerability",
+              url: "https://github.com/advisories/GHSA-remaining-mixed",
+            },
+          ],
+        },
+      },
+    }),
+    oldLock: {
+      packages: {
+        "node_modules/mixed-fixture": { version: "1.0.0" },
+      },
+    },
+    newLock: {
+      packages: {
+        "node_modules/mixed-fixture": { version: "1.0.1" },
+      },
+    },
+  });
+
+  assert.equal(
+    message,
+    [
+      "build: update vulnerable npm packages",
+      "",
+      "- mixed-fixture (prod; high; <2.0.0; 1.0.0 -> 1.0.1)",
+      "  - Fixed mixed fixture vulnerability - https://github.com/advisories/GHSA-fixed-mixed",
+      "",
+    ].join("\n"),
+  );
+});
+
+test("generateMessageFromInputs shows direct package.json requesters", () => {
+  const message = generateMessageFromInputs({
+    auditRaw: JSON.stringify({
+      vulnerabilities: {
+        "vulnerable-fixture": {
+          name: "vulnerable-fixture",
+          severity: "high",
+          range: "<1.0.1",
+          via: [
+            {
+              title: "Vulnerable fixture advisory",
+              url: "https://github.com/advisories/GHSA-requester-test",
+            },
+          ],
+        },
+        "chain-fixture": {
+          name: "chain-fixture",
+          severity: "high",
+          range: "*",
+          via: ["vulnerable-fixture"],
+        },
+      },
+    }),
+    auditAfterRaw: JSON.stringify({ vulnerabilities: {} }),
+    oldLock: {
+      packages: {
+        "": { dependencies: { "direct-fixture": "^1.0.0" } },
+        "node_modules/direct-fixture": {
+          version: "1.0.0",
+          dependencies: { "vulnerable-fixture": "^1.0.0" },
+        },
+        "node_modules/vulnerable-fixture": { version: "1.0.0" },
+      },
+    },
+    newLock: {
+      packages: {
+        "": { dependencies: { "direct-fixture": "^1.0.0" } },
+        "node_modules/direct-fixture": {
+          version: "1.1.0",
+          dependencies: { "vulnerable-fixture": "^1.0.0" },
+        },
+        "node_modules/vulnerable-fixture": { version: "1.0.1" },
+      },
+    },
+  });
+
+  assert.equal(
+    message,
+    [
+      "build: update vulnerable npm packages",
+      "",
+      "- vulnerable-fixture (prod; high; <1.0.1; 1.0.0 -> 1.0.1)",
+      "  - Vulnerable fixture advisory - https://github.com/advisories/GHSA-requester-test",
+      "  - via package.json: root dependency direct-fixture (1.0.0 -> 1.1.0)",
+      "",
+    ].join("\n"),
+  );
+  assert.doesNotMatch(message, /chain-fixture/);
+});
+
+test("fixedAdvisoriesByPackage removes remaining advisory URLs", () => {
+  const advisories = new Map([
+    [
+      "mixed-fixture",
+      {
+        name: "mixed-fixture",
+        advisories: [
+          {
+            title: "Fixed mixed fixture vulnerability",
+            url: "https://github.com/advisories/GHSA-fixed-mixed",
+          },
+          {
+            title: "Remaining mixed fixture vulnerability",
+            url: "https://github.com/advisories/GHSA-remaining-mixed",
+          },
+        ],
+      },
+    ],
+  ]);
+  const remaining = new Map([
+    [
+      "mixed-fixture",
+      {
+        name: "mixed-fixture",
+        advisories: [
+          {
+            title: "Remaining mixed fixture vulnerability",
+            url: "https://github.com/advisories/GHSA-remaining-mixed",
+          },
+        ],
+      },
+    ],
+  ]);
+
+  assert.deepEqual([...fixedAdvisoriesByPackage(advisories, remaining)], [
+    [
+      "mixed-fixture",
+      {
+        name: "mixed-fixture",
+        advisories: [
+          {
+            title: "Fixed mixed fixture vulnerability",
+            url: "https://github.com/advisories/GHSA-fixed-mixed",
+          },
+        ],
+      },
+    ],
+  ]);
 });
 
 test("sanitizeCommitField removes terminal and bidi control sequences", () => {

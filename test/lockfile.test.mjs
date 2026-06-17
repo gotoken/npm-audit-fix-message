@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { changedPackages } from "../src/lockfile.mjs";
+import {
+  changedPackages,
+  directDependencyRequestersForChanges,
+} from "../src/lockfile.mjs";
 
 test("changedPackages handles scoped packages and dependency kind", () => {
   const changes = changedPackages(
@@ -58,4 +61,83 @@ test("changedPackages handles duplicate package names and unchanged packages", (
     kind: "prod",
   });
   assert.equal(changes.has("unchanged"), false);
+});
+
+test("directDependencyRequestersForChanges finds package.json requesters", () => {
+  const oldLock = {
+    packages: {
+      "": { dependencies: { "direct-prod": "^1.0.0" } },
+      "apps/gui": { devDependencies: { "direct-dev": "^2.0.0" } },
+      "node_modules/direct-prod": {
+        version: "1.0.0",
+        dependencies: { "vulnerable-fixture": "^1.0.0" },
+      },
+      "apps/gui/node_modules/direct-dev": {
+        version: "2.0.0",
+        dependencies: { "vulnerable-fixture": "^1.0.0" },
+      },
+      "node_modules/vulnerable-fixture": { version: "1.0.0" },
+      "apps/gui/node_modules/vulnerable-fixture": { version: "1.0.0" },
+    },
+  };
+  const newLock = {
+    packages: {
+      ...oldLock.packages,
+      "node_modules/vulnerable-fixture": { version: "1.0.1" },
+      "apps/gui/node_modules/vulnerable-fixture": { version: "1.0.0" },
+    },
+  };
+  const changes = changedPackages(oldLock, newLock);
+  const requesters = directDependencyRequestersForChanges(
+    oldLock,
+    newLock,
+    changes,
+  );
+
+  assert.deepEqual(requesters.get("vulnerable-fixture"), [
+    {
+      kind: "prod",
+      manifestPath: ".",
+      name: "direct-prod",
+    },
+  ]);
+});
+
+test("directDependencyRequestersForChanges includes changed direct package versions", () => {
+  const oldLock = {
+    packages: {
+      "": { devDependencies: { "direct-dev": "^2.0.0" } },
+      "node_modules/direct-dev": {
+        version: "2.0.0",
+        dependencies: { "vulnerable-fixture": "^1.0.0" },
+      },
+      "node_modules/vulnerable-fixture": { version: "1.0.0" },
+    },
+  };
+  const newLock = {
+    packages: {
+      "": { devDependencies: { "direct-dev": "^2.0.0" } },
+      "node_modules/direct-dev": {
+        version: "2.1.0",
+        dependencies: { "vulnerable-fixture": "^1.0.0" },
+      },
+      "node_modules/vulnerable-fixture": { version: "1.0.1" },
+    },
+  };
+  const changes = changedPackages(oldLock, newLock);
+  const requesters = directDependencyRequestersForChanges(
+    oldLock,
+    newLock,
+    changes,
+  );
+
+  assert.deepEqual(requesters.get("vulnerable-fixture"), [
+    {
+      from: "2.0.0",
+      kind: "dev",
+      manifestPath: ".",
+      name: "direct-dev",
+      to: "2.1.0",
+    },
+  ]);
 });
