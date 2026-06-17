@@ -22,8 +22,16 @@ export function sanitizeCommitField(value) {
     .replace(BIDI_CONTROL, "");
 }
 
-function advisoryKey(advisory) {
-  return advisory?.url || advisory?.title;
+function advisoryKey(packageName, advisory) {
+  if (advisory?.url) {
+    return `${packageName}\0url\0${advisory.url}`;
+  }
+
+  if (advisory?.title) {
+    return `${packageName}\0title\0${advisory.title}`;
+  }
+
+  return undefined;
 }
 
 function remainingAdvisoryKeys(remainingAdvisories) {
@@ -33,8 +41,9 @@ function remainingAdvisoryKeys(remainingAdvisories) {
 
   return new Set(
     [...remainingAdvisories.values()]
-      .flatMap((advisory) => advisory.advisories)
-      .map(advisoryKey)
+      .flatMap((advisory) =>
+        advisory.advisories.map((via) => advisoryKey(advisory.name, via)),
+      )
       .filter(Boolean),
   );
 }
@@ -52,7 +61,7 @@ export function fixedAdvisoriesByPackage(
 
   for (const [name, advisory] of advisoriesByPackage) {
     const fixedVia = advisory.advisories.filter((via) => {
-      const key = advisoryKey(via);
+      const key = advisoryKey(name, via);
       return key ? !remainingKeys.has(key) : true;
     });
 

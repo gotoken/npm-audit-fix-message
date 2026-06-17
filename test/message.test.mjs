@@ -371,6 +371,37 @@ test("fixedAdvisoriesByPackage removes remaining advisory URLs", () => {
   ]);
 });
 
+test("fixedAdvisoriesByPackage scopes title fallback by package name", () => {
+  const advisories = new Map([
+    [
+      "fixed-fixture",
+      {
+        name: "fixed-fixture",
+        advisories: [{ title: "Shared advisory title" }],
+      },
+    ],
+  ]);
+  const remaining = new Map([
+    [
+      "remaining-fixture",
+      {
+        name: "remaining-fixture",
+        advisories: [{ title: "Shared advisory title" }],
+      },
+    ],
+  ]);
+
+  assert.deepEqual([...fixedAdvisoriesByPackage(advisories, remaining)], [
+    [
+      "fixed-fixture",
+      {
+        name: "fixed-fixture",
+        advisories: [{ title: "Shared advisory title" }],
+      },
+    ],
+  ]);
+});
+
 test("sanitizeCommitField removes terminal and bidi control sequences", () => {
   assert.equal(
     sanitizeCommitField(
