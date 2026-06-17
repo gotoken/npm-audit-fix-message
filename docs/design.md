@@ -38,10 +38,12 @@ If `npm audit fix` exits non-zero after applying lockfile changes, `--fix`
 still generates a message for the changed packages and warns that remaining
 vulnerabilities may require a separate action such as `npm audit fix --force`.
 Unchanged vulnerable packages are not included in the generated commit message,
-and npm's full audit report is suppressed in this partial-success path so the
-commit message remains easy to copy from stdout. The command captures post-fix
-audit output and omits advisory URLs that are still reported as vulnerable,
-even if one lockfile entry for the affected package changed version.
+and npm's full audit report is suppressed so the commit message remains easy to
+copy from stdout. If `npm audit fix` fails without lockfile changes, the error
+includes npm's stderr when available and otherwise points the user back to
+`npm audit` for details. The command captures post-fix audit output and omits
+advisory URLs that are still reported as vulnerable, even if one lockfile entry
+for the affected package changed version.
 
 Audit graph nodes whose `via` entries only reference other packages are not
 reported as fixed packages. They can appear as dependency context through nested

@@ -135,8 +135,9 @@ export function runNpmAuditJson() {
 
 export function runNpmAuditFix() {
   const result = spawnSync("npm", ["audit", "fix"], {
+    encoding: "utf8",
     env: process.env,
-    stdio: ["ignore", "ignore", "ignore"],
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
   if (result.error) {
@@ -146,6 +147,8 @@ export function runNpmAuditFix() {
   return {
     signal: result.signal,
     status: result.status,
+    stderr: result.stderr,
+    stdout: result.stdout,
   };
 }
 
@@ -159,6 +162,17 @@ function auditFixExitDescription(result) {
   }
 
   return `status ${result?.status ?? "unknown"}`;
+}
+
+function auditFixFailureMessage(result) {
+  const exitDescription = auditFixExitDescription(result);
+  const details = (result?.stderr || "").trim();
+
+  if (details) {
+    return `npm audit fix failed with ${exitDescription}: ${details}`;
+  }
+
+  return `npm audit fix failed with ${exitDescription}. Run npm audit to review details.`;
 }
 
 export function collectFixInputs(options, helpers = {}) {
@@ -181,7 +195,7 @@ export function collectFixInputs(options, helpers = {}) {
     const changes = changedPackages(oldLock, newLock);
 
     if (changes.size === 0) {
-      throw new Error("npm audit fix failed.");
+      throw new Error(auditFixFailureMessage(fixResult));
     }
 
     warn(

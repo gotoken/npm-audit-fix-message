@@ -170,22 +170,68 @@ test("collectFixInputs rejects failed npm audit fix without lockfile changes", (
   };
   const warnings = [];
 
+  let error;
   assert.throws(
-    () =>
-      collectFixInputs(
-        { lockfile: "package-lock.json" },
-        {
-          cwd: () => "/work/project",
-          readJson: () => lock,
-          resolvePath: (...parts) => parts.join("/"),
-          runAuditFix: () => ({ status: 1 }),
-          runAuditJson: () => '{"vulnerabilities":{}}',
-          warn: (message) => warnings.push(message),
-        },
-      ),
-    /npm audit fix failed/,
+    () => {
+      try {
+        collectFixInputs(
+          { lockfile: "package-lock.json" },
+          {
+            cwd: () => "/work/project",
+            readJson: () => lock,
+            resolvePath: (...parts) => parts.join("/"),
+            runAuditFix: () => ({
+              status: 1,
+              stderr: "npm ERR! could not resolve dependency tree\n",
+              stdout: "stdout details\n",
+            }),
+            runAuditJson: () => '{"vulnerabilities":{}}',
+            warn: (message) => warnings.push(message),
+          },
+        );
+      } catch (caught) {
+        error = caught;
+        throw caught;
+      }
+    },
+    /npm audit fix failed with status 1: npm ERR! could not resolve dependency tree/,
   );
+  assert.doesNotMatch(error.message, /stdout details/);
   assert.deepEqual(warnings, []);
+});
+
+test("collectFixInputs suppresses stdout report when failed npm audit fix has no stderr", () => {
+  const lock = {
+    packages: {
+      "node_modules/fixture-runner": { version: "2.3.1", dev: true },
+    },
+  };
+
+  let error;
+  assert.throws(
+    () => {
+      try {
+        collectFixInputs(
+          { lockfile: "package-lock.json" },
+          {
+            cwd: () => "/work/project",
+            readJson: () => lock,
+            resolvePath: (...parts) => parts.join("/"),
+            runAuditFix: () => ({
+              status: 1,
+              stdout: "# npm audit report\nfixture <1.0.0\n",
+            }),
+            runAuditJson: () => '{"vulnerabilities":{}}',
+          },
+        );
+      } catch (caught) {
+        error = caught;
+        throw caught;
+      }
+    },
+    /npm audit fix failed with status 1\. Run npm audit to review details\./,
+  );
+  assert.doesNotMatch(error.message, /# npm audit report/);
 });
 
 test("collectAuditInputs reads saved audit output and git base lockfile", () => {

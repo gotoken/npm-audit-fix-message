@@ -39,8 +39,8 @@ If `npm audit fix` applies some lockfile updates but exits non-zero because
 other vulnerabilities remain, this command still prints a commit message for
 the actual lockfile changes and writes a warning to stderr. Remaining
 vulnerabilities are not listed as fixed. The full `npm audit fix` report is
-suppressed in this partial-success case so the generated commit message stays
-easy to copy; run `npm audit` afterward to inspect the remaining issues. To
+suppressed so the generated commit message stays easy to copy; run `npm audit`
+afterward to inspect the remaining issues. To
 avoid claiming unresolved advisories were fixed, `--fix` also checks post-fix
 audit output and omits advisory URLs that are still reported as vulnerable.
 
@@ -83,7 +83,9 @@ npx npm-audit-fix-message --audit tmp/npm-audit-before.json --message-file .git/
   old and new versions.
 - If `npm audit fix` exits non-zero after changing the lockfile, `--fix`
   treats the changed packages as a partial success and warns that issues may
-  remain. It does not print npm's full audit report in this case, and it omits
-  advisories that are still present in post-fix audit output.
+  remain. It omits advisories that are still present in post-fix audit output.
+- It does not print npm's full audit report. If `npm audit fix` fails without
+  lockfile changes, the error includes npm's stderr when available and otherwise
+  asks you to run `npm audit` for details.
 - `npm audit --json` can exit non-zero when vulnerabilities are present; this is
   expected, and the CLI uses the JSON output when npm provides it.
