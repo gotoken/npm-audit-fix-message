@@ -34,6 +34,11 @@ possibly `package.json`, depending on what npm decides is needed. Run it from
 the project you want to update, preferably with a clean working tree so the
 resulting lockfile changes are easy to review.
 
+If `npm audit fix` applies some lockfile updates but exits non-zero because
+other vulnerabilities remain, this command still prints a commit message for
+the actual lockfile changes and writes a warning to stderr. Remaining
+vulnerabilities are not listed as fixed.
+
 Generate from a saved audit output:
 
 ```sh
@@ -66,5 +71,8 @@ npx npm-audit-fix-message --audit tmp/npm-audit-before.json --message-file .git/
 - It only compares npm lockfiles and audit output.
 - It reports packages that both changed in the lockfile and appeared in the
   pre-fix audit output.
+- If `npm audit fix` exits non-zero after changing the lockfile, `--fix`
+  treats the changed packages as a partial success and warns that issues may
+  remain.
 - `npm audit --json` can exit non-zero when vulnerabilities are present; this is
   expected, and the CLI uses the JSON output when npm provides it.
