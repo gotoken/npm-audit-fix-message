@@ -83,5 +83,11 @@ export function parseAuditText(raw) {
     }
   }
 
+  for (const [name, advisory] of advisoriesByPackage) {
+    if (advisory.advisories.length === 0) {
+      advisoriesByPackage.delete(name);
+    }
+  }
+
   return advisoriesByPackage;
 }
