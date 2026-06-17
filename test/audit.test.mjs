@@ -86,6 +86,8 @@ fixture-parser  1.1.0 - 1.8.3
 Severity: critical
 Fixture parser mishandles quoted input - https://github.com/advisories/GHSA-aaaa-bbbb-cccc
 Fixture parser allows unsafe token expansion - https://github.com/advisories/GHSA-4444-5555-6666
+fixture-chain  *
+Severity: moderate
 `);
 
   assert.deepEqual(audit.get("fixture-parser"), {
@@ -103,4 +105,5 @@ Fixture parser allows unsafe token expansion - https://github.com/advisories/GHS
       },
     ],
   });
+  assert.equal(audit.has("fixture-chain"), false);
 });
