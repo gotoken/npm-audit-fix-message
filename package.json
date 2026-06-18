@@ -1,6 +1,6 @@
 {
   "name": "npm-audit-fix-message",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Generate version-aware commit messages for npm audit fix changes.",
   "type": "module",
   "author": "gotoken",
