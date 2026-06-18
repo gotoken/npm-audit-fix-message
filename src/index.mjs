@@ -137,7 +137,7 @@ export function runNpmAuditFix() {
   const result = spawnSync("npm", ["audit", "fix"], {
     encoding: "utf8",
     env: process.env,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ["ignore", "ignore", "pipe"],
   });
 
   if (result.error) {
@@ -148,7 +148,6 @@ export function runNpmAuditFix() {
     signal: result.signal,
     status: result.status,
     stderr: result.stderr,
-    stdout: result.stdout,
   };
 }
 

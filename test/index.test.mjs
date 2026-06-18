@@ -183,7 +183,6 @@ test("collectFixInputs rejects failed npm audit fix without lockfile changes", (
             runAuditFix: () => ({
               status: 1,
               stderr: "npm ERR! could not resolve dependency tree\n",
-              stdout: "stdout details\n",
             }),
             runAuditJson: () => '{"vulnerabilities":{}}',
             warn: (message) => warnings.push(message),
